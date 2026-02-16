@@ -6,7 +6,8 @@ interface StatsData {
   pending: number;
 }
 
-const API_URL = `${import.meta.env.VITE_SERVER_URL || 'http://localhost:5000'}/api/tasks`;
+const BASE_URL = (import.meta.env.VITE_SERVER_URL || 'http://localhost:5000').replace(/\/$/, '');
+const API_URL = `${BASE_URL}/api/tasks`;
 
 const useAnimatedCounter = (target: number, duration: number = 600): number => {
   const [count, setCount] = useState(0);

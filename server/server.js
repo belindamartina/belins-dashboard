@@ -7,7 +7,11 @@ const PORT = 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017';
 const DB_NAME = 'belins';
 
-app.use(cors());
+app.use(cors({
+  origin: '*', // Allow all origins for now to fix connection issues
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type']
+}));
 app.use(express.json());
 
 let db;

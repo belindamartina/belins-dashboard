@@ -7,7 +7,8 @@ interface Task {
   createdAt: string;
 }
 
-const API_URL = `${import.meta.env.VITE_SERVER_URL || 'http://localhost:5000'}/api/tasks`;
+const BASE_URL = (import.meta.env.VITE_SERVER_URL || 'http://localhost:5000').replace(/\/$/, '');
+const API_URL = `${BASE_URL}/api/tasks`;
 
 const TaskManager: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
