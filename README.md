@@ -87,10 +87,6 @@ belins-dashboard/
     npm run dev
     ```
 
-##  Deployment
-
-For detailed instructions on how to deploy this project to **GitHub Pages** (Frontend) and **Vercel** (Backend), please refer to the [DEPLOYMENT.md](DEPLOYMENT.md) guide.
-
 ##  License
 
 This project is open-source and available under the MIT License.
