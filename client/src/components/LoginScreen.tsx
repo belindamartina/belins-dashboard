@@ -30,7 +30,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
       <div className="login-card">
         <div className="login-logo">
-          <img src="/logo.svg" alt="Belins Logo" className="login-logo-img" />
+          <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Belins Logo" className="login-logo-img" />
           <h1 className="login-title">Belins</h1>
         </div>
         <p className="login-subtitle">Your Personal Productivity Dashboard</p>
