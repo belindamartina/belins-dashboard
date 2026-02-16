@@ -1,0 +1,24 @@
+# Common
+node_modules
+.DS_Store
+.env
+*.log
+
+# Client specific
+client/dist
+client/dist-ssr
+client/coverage
+client/*.local
+
+# Server specific
+server/vercel.json
+server/node_modules
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
