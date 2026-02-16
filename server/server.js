@@ -8,49 +8,70 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017';
 const DB_NAME = 'belins';
 
 app.use(cors({
-  origin: '*', // Allow all origins for now to fix connection issues
+  origin: '*',
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type']
 }));
 app.use(express.json());
 
-let db;
-let tasksCollection;
-
-// In-memory fallback if MongoDB is not available
-let inMemoryTasks = [];
+// --- Database Connection Handling ---
+let cachedClient = null;
+let cachedDb = null;
 let useInMemory = false;
+let inMemoryTasks = [];
 let nextId = 1;
 
-async function connectDB() {
+async function getCollection() {
+  // If we already decided to use in-memory, return null immediately
+  if (useInMemory) return null;
+
+  // If we have a cached connection, return it
+  if (cachedDb) {
+    return cachedDb.collection('tasks');
+  }
+
   try {
-    const client = new MongoClient(MONGO_URI, {
-      serverSelectionTimeoutMS: 3000,
-    });
-    await client.connect();
-    db = client.db(DB_NAME);
-    tasksCollection = db.collection('tasks');
-    console.log('✅ Connected to MongoDB');
+    // If no connection, try to connect
+    if (!cachedClient) {
+      cachedClient = new MongoClient(MONGO_URI, {
+        serverSelectionTimeoutMS: 5000, // 5 second timeout
+        connectTimeoutMS: 10000,
+      });
+      await cachedClient.connect();
+      console.log('✅ New connection to MongoDB established');
+    }
+
+    cachedDb = cachedClient.db(DB_NAME);
+    return cachedDb.collection('tasks');
   } catch (err) {
-    console.log('⚠️  MongoDB not available — using in-memory storage');
+    console.error('⚠️ MongoDB Connection Failed:', err.message);
     useInMemory = true;
+    return null;
   }
 }
 
-// GET all tasks
+// --- Routes ---
+
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    storage: useInMemory ? 'in-memory' : 'mongodb',
+    env: process.env.VERCEL ? 'vercel' : 'local' 
+  });
+});
+
 app.get('/api/tasks', async (req, res) => {
   try {
-    if (useInMemory) {
-      return res.json(inMemoryTasks);
-    }
-    const tasks = await tasksCollection.find({}).sort({ createdAt: -1 }).toArray();
+    const collection = await getCollection();
+    if (!collection) return res.json(inMemoryTasks);
+
+    const tasks = await collection.find({}).sort({ createdAt: -1 }).toArray();
     res.json(tasks);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST create task
 app.post('/api/tasks', async (req, res) => {
   try {
     const { text } = req.body;
@@ -62,12 +83,15 @@ app.post('/api/tasks', async (req, res) => {
       completed: false,
       createdAt: new Date().toISOString(),
     };
-    if (useInMemory) {
+
+    const collection = await getCollection();
+    if (!collection) {
       task._id = String(nextId++);
       inMemoryTasks.unshift(task);
       return res.status(201).json(task);
     }
-    const result = await tasksCollection.insertOne(task);
+
+    const result = await collection.insertOne(task);
     task._id = result.insertedId;
     res.status(201).json(task);
   } catch (err) {
@@ -75,19 +99,22 @@ app.post('/api/tasks', async (req, res) => {
   }
 });
 
-// PATCH toggle task completion
 app.patch('/api/tasks/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    if (useInMemory) {
+    const collection = await getCollection();
+
+    if (!collection) {
       const task = inMemoryTasks.find((t) => t._id === id);
       if (!task) return res.status(404).json({ error: 'Task not found' });
       task.completed = !task.completed;
       return res.json(task);
     }
-    const task = await tasksCollection.findOne({ _id: new ObjectId(id) });
+
+    const task = await collection.findOne({ _id: new ObjectId(id) });
     if (!task) return res.status(404).json({ error: 'Task not found' });
-    await tasksCollection.updateOne(
+    
+    await collection.updateOne(
       { _id: new ObjectId(id) },
       { $set: { completed: !task.completed } }
     );
@@ -97,17 +124,19 @@ app.patch('/api/tasks/:id', async (req, res) => {
   }
 });
 
-// DELETE task
 app.delete('/api/tasks/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    if (useInMemory) {
+    const collection = await getCollection();
+
+    if (!collection) {
       const idx = inMemoryTasks.findIndex((t) => t._id === id);
       if (idx === -1) return res.status(404).json({ error: 'Task not found' });
       inMemoryTasks.splice(idx, 1);
       return res.json({ success: true });
     }
-    const result = await tasksCollection.deleteOne({ _id: new ObjectId(id) });
+
+    const result = await collection.deleteOne({ _id: new ObjectId(id) });
     if (result.deletedCount === 0)
       return res.status(404).json({ error: 'Task not found' });
     res.json({ success: true });
@@ -116,17 +145,10 @@ app.delete('/api/tasks/:id', async (req, res) => {
   }
 });
 
-// Export app for Vercel
 module.exports = app;
 
-// Only start server if run directly
 if (require.main === module) {
-  connectDB().then(() => {
-    app.listen(PORT, () => {
-      console.log(`🚀 Belins API running on http://localhost:${PORT}`);
-    });
+  app.listen(PORT, () => {
+    console.log(`🚀 Belins API running on http://localhost:${PORT}`);
   });
-} else {
-  // Start connection for serverless environment
-  connectDB();
 }
